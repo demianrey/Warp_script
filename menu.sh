@@ -308,6 +308,12 @@ E[147]="WARP registered via proxy. Checking assigned region..."
 C[147]="WARP 已通过代理注册。正在检查分配的地区..."
 E[148]="Assigned region: \$PROXY_REGION. "
 C[148]="分配的地区: \$PROXY_REGION。"
+E[149]="Installing proxychains4..."
+C[149]="正在安装 proxychains4..."
+E[150]="Failed to install proxychains. Please install it manually."
+C[150]="安装 proxychains 失败。请手动安装。"
+E[151]="Registering WARP via proxychains..."
+C[151]="正在通过 proxychains 注册 WARP..."
 S[1]="1. Cuentas: Se eliminaron los tipos de cuenta WARP+ y Teams obsoletos del proceso de instalación y actualización (warp a) siguiendo los ajustes de Cloudflare; 2. Corrección de Bug: Se resolvió la interrupción de red corrigiendo el manejo de reglas de enrutamiento durante la eliminación del Linux Client en modo proxy; 3. Rendimiento: Se implementó una IP API propia para mejorar significativamente la velocidad de obtención de IP; 4. Limpieza: Se eliminaron mensajes obsoletos y UI redundante."
 S[2]="El script debe ejecutarse como root, puede ingresar sudo -i y luego descargar y ejecutar de nuevo. Comentarios: [https://github.com/fscarmen/warp-sh/issues]"
 S[3]="El módulo TUN no está cargado. Debe activarlo en el panel de control. Solicite más ayuda al proveedor. Comentarios: [https://github.com/fscarmen/warp-sh/issues]"
@@ -455,6 +461,9 @@ S[144]="Conexión al proxy exitosa. Registrando WARP vía proxy..."
 S[146]="Conexión al proxy fallida. Verifique la configuración del proxy."
 S[147]="WARP registrado vía proxy. Verificando región asignada..."
 S[148]="Región asignada: \$PROXY_REGION. "
+S[149]="Instalando proxychains4..."
+S[150]="Falló la instalación de proxychains. Por favor instálelo manualmente."
+S[151]="Registrando WARP vía proxychains..."
 
 # 自定义字体彩色，read 函数
 warning() { echo -e "\033[31m\033[01m$*\033[0m"; }  # 红色
@@ -997,24 +1006,49 @@ register_via_proxy() {
       error " $(text 30) "
     fi
 
+    # Instalar proxychains4 si no está instalado
+    if [ ! -x "$(type -p proxychains4)" ] && [ ! -x "$(type -p proxychains)" ]; then
+      hint "\n $(text 149) \n"
+      ${PACKAGE_UPDATE[int]} >/dev/null 2>&1
+      ${PACKAGE_INSTALL[int]} proxychains4 >/dev/null 2>&1 || ${PACKAGE_INSTALL[int]} proxychains-ng >/dev/null 2>&1 || ${PACKAGE_INSTALL[int]} proxychains >/dev/null 2>&1
+    fi
+
+    # Determinar comando proxychains disponible
+    PROXYCHAINS_CMD=""
+    [ -x "$(type -p proxychains4)" ] && PROXYCHAINS_CMD="proxychains4"
+    [ -z "$PROXYCHAINS_CMD" ] && [ -x "$(type -p proxychains)" ] && PROXYCHAINS_CMD="proxychains"
+
+    if [ -z "$PROXYCHAINS_CMD" ]; then
+      error " $(text 150) "
+    fi
+
+    # Crear archivo de configuración temporal para proxychains
+    PROXYCHAINS_CONF="/tmp/proxychains_warp.conf"
+    cat > "$PROXYCHAINS_CONF" << EOF
+strict_chain
+proxy_dns
+tcp_read_time_out 15000
+tcp_connect_time_out 8000
+[ProxyList]
+socks5 ${PROXY_HOST} ${PROXY_PORT}
+EOF
+
     # Eliminar registro actual
     warp-cli --accept-tos disconnect >/dev/null 2>&1
     warp-cli --accept-tos registration delete >/dev/null 2>&1
     sleep 2
 
-    # Registrar WARP usando el proxy (configurar proxy del sistema temporalmente)
-    export ALL_PROXY="socks5h://${SOCKS_PROXY}"
-    export HTTPS_PROXY="socks5h://${SOCKS_PROXY}"
+    # Registrar WARP usando proxychains
+    hint "\n $(text 151) \n"
+    $PROXYCHAINS_CMD -f "$PROXYCHAINS_CONF" warp-cli --accept-tos registration new 2>/dev/null
+    sleep 3
 
-    warp-cli --accept-tos registration new >/dev/null 2>&1
-    sleep 2
-
-    # Limpiar variables de proxy
-    unset ALL_PROXY HTTPS_PROXY
+    # Limpiar archivo temporal
+    rm -f "$PROXYCHAINS_CONF"
 
     # Reconectar WARP
     warp-cli --accept-tos connect >/dev/null 2>&1
-    sleep 3
+    sleep 5
 
     # Verificar región obtenida
     hint "\n $(text 147) \n"

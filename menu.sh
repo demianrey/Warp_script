@@ -294,6 +294,20 @@ E[139]="Working mode:\n 1. Global (default)\n 2. Non-global"
 C[139]="工作模式:\n 1. 全局 (默认)\n 2. 非全局"
 E[140]="\${MODE_BEFORE} ---\> \${MODE_AFTER}, Confirm press [y] :"
 C[140]="\${MODE_BEFORE} ---\> \${MODE_AFTER}， 确认请按 [y] :"
+E[141]="Register WARP via external SOCKS5 proxy (to get IP from another region)"
+C[141]="通过外部 SOCKS5 代理注册 WARP（以获取其他地区的 IP）"
+E[142]="Enter SOCKS5 proxy (host:port). Example: proxy.example.com:1080 :"
+C[142]="输入 SOCKS5 代理 (主机:端口)。例如: proxy.example.com:1080 :"
+E[143]="Testing proxy connection..."
+C[143]="测试代理连接..."
+E[144]="Proxy connection successful. Registering WARP via proxy..."
+C[144]="代理连接成功。正在通过代理注册 WARP..."
+E[146]="Proxy connection failed. Check your proxy settings."
+C[146]="代理连接失败。请检查代理设置。"
+E[147]="WARP registered via proxy. Checking assigned region..."
+C[147]="WARP 已通过代理注册。正在检查分配的地区..."
+E[148]="Assigned region: \$PROXY_REGION. "
+C[148]="分配的地区: \$PROXY_REGION。"
 S[1]="1. Cuentas: Se eliminaron los tipos de cuenta WARP+ y Teams obsoletos del proceso de instalación y actualización (warp a) siguiendo los ajustes de Cloudflare; 2. Corrección de Bug: Se resolvió la interrupción de red corrigiendo el manejo de reglas de enrutamiento durante la eliminación del Linux Client en modo proxy; 3. Rendimiento: Se implementó una IP API propia para mejorar significativamente la velocidad de obtención de IP; 4. Limpieza: Se eliminaron mensajes obsoletos y UI redundante."
 S[2]="El script debe ejecutarse como root, puede ingresar sudo -i y luego descargar y ejecutar de nuevo. Comentarios: [https://github.com/fscarmen/warp-sh/issues]"
 S[3]="El módulo TUN no está cargado. Debe activarlo en el panel de control. Solicite más ayuda al proveedor. Comentarios: [https://github.com/fscarmen/warp-sh/issues]"
@@ -434,6 +448,13 @@ S[138]="\${WIREGUARD_BEFORE} ---\> \${WIREGUARD_AFTER}. Confirme presionando [y]
 S[139]="Modo de trabajo:\n 1. Global (predeterminado)\n 2. No-global"
 S[140]="\${MODE_BEFORE} ---\> \${MODE_AFTER}, Confirme presionando [y] :"
 S[145]="No se puede encontrar el archivo de configuración warp.conf. El script se interrumpe. Comentarios: [https://github.com/fscarmen/warp-sh/issues]"
+S[141]="Registrar WARP vía proxy SOCKS5 externo (para obtener IP de otra región)"
+S[142]="Ingrese proxy SOCKS5 (host:puerto). Ejemplo: proxy.example.com:1080 :"
+S[143]="Probando conexión al proxy..."
+S[144]="Conexión al proxy exitosa. Registrando WARP vía proxy..."
+S[146]="Conexión al proxy fallida. Verifique la configuración del proxy."
+S[147]="WARP registrado vía proxy. Verificando región asignada..."
+S[148]="Región asignada: \$PROXY_REGION. "
 
 # 自定义字体彩色，read 函数
 warning() { echo -e "\033[31m\033[01m$*\033[0m"; }  # 红色
@@ -951,6 +972,65 @@ input_region() {
     reading " $(text 56) " EXPECT
   done
   [[ -z "$EXPECT" || "${EXPECT,,}" = 'y' ]] && EXPECT="${REGION^^}"
+}
+
+# Registrar WARP vía proxy SOCKS5 externo para obtener IP de otra región
+register_via_proxy() {
+  # Proxy predeterminado (puede ser modificado)
+  DEFAULT_PROXY="d2rey.duckdns.org:35700"
+
+  hint "\n $(text 141) \n"
+  reading " $(text 142) " SOCKS_PROXY
+  [ -z "$SOCKS_PROXY" ] && SOCKS_PROXY="$DEFAULT_PROXY"
+
+  # Extraer host y puerto
+  PROXY_HOST="${SOCKS_PROXY%:*}"
+  PROXY_PORT="${SOCKS_PROXY##*:}"
+
+  # Probar conexión al proxy
+  hint "\n $(text 143) \n"
+  if curl --connect-timeout 5 -x socks5h://${SOCKS_PROXY} -s https://www.cloudflare.com/cdn-cgi/trace >/dev/null 2>&1; then
+    info " $(text 144) \n"
+
+    # Verificar que warp-cli esté instalado
+    if [ ! -x "$(type -p warp-cli)" ]; then
+      error " $(text 30) "
+    fi
+
+    # Eliminar registro actual
+    warp-cli --accept-tos disconnect >/dev/null 2>&1
+    warp-cli --accept-tos registration delete >/dev/null 2>&1
+    sleep 2
+
+    # Registrar WARP usando el proxy (configurar proxy del sistema temporalmente)
+    export ALL_PROXY="socks5h://${SOCKS_PROXY}"
+    export HTTPS_PROXY="socks5h://${SOCKS_PROXY}"
+
+    warp-cli --accept-tos registration new >/dev/null 2>&1
+    sleep 2
+
+    # Limpiar variables de proxy
+    unset ALL_PROXY HTTPS_PROXY
+
+    # Reconectar WARP
+    warp-cli --accept-tos connect >/dev/null 2>&1
+    sleep 3
+
+    # Verificar región obtenida
+    hint "\n $(text 147) \n"
+    PROXY_REGION=$(curl -s --max-time 10 https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null | awk -F '=' '/^loc/{print $NF}')
+    PROXY_REGION=${PROXY_REGION:-'Unknown'}
+
+    info " $(text 148) \n"
+
+    # Mostrar información de la IP actual
+    ip_case 4
+    ip_case 6
+    [ -n "$WAN4" ] && info " IPv4: $WAN4 $COUNTRY4 $ASNORG4 "
+    [ -n "$WAN6" ] && info " IPv6: $WAN6 $COUNTRY6 $ASNORG6 "
+  else
+    error " $(text 146) "
+  fi
 }
 
 # 更换支持 Netflix WARP IP 改编自 [luoxue-bot] 的成熟作品，地址[https://github.com/luoxue-bot/warp_auto_change_ip]
@@ -2559,6 +2639,7 @@ menu_setting() {
   MENU_OPTION[12]="12. ${IPTABLE_INSTALLED}$(text 57)"
   MENU_OPTION[13]="13. ${WIREPROXY_INSTALLED}$(text 113)"
   MENU_OPTION[14]="14. ${CLIENT_INSTALLED}${CLIENT_NOT_ALLOWED_ARCHITECTURE}$(text 132)"
+  MENU_OPTION[15]="15. ${CLIENT_INSTALLED}$(text 141)"
   MENU_OPTION[0]="0.  $(text 76)"
 
   ACTION[4]() { OPTION=o; onoff; }
@@ -2567,6 +2648,7 @@ menu_setting() {
   ACTION[12]() { IS_ANEMONE=is_anemone ;install; };
   ACTION[13]() { IS_PUFFERFFISH=is_pufferffish; install; };
   ACTION[14]() { IS_LUBAN=is_luban; client_install; };
+  ACTION[15]() { register_via_proxy; };
   ACTION[0]() { exit; }
   }
 

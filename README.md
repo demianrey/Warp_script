@@ -102,7 +102,7 @@
 
 Primera ejecución
 ```
-wget -N https://raw.githubusercontent.com/demianrey/Warp_script/main/menu.sh && bash menu.sh [opción] [licencia/url/token]
+wget -N https://raw.githubusercontent.com/demianrey/Warp_script/refs/heads/mod/menu.sh && bash menu.sh [opción] [licencia/url/token]
 ```
 Ejecuciones posteriores
 ```
@@ -136,7 +136,7 @@ warp [opción] [licencia]
 
 Ejemplo: Para añadir doble pila Warp a un Oracle IPv4 por primera vez
 ```
-wget -N https://raw.githubusercontent.com/demianrey/Warp_script/main/menu.sh && bash menu.sh d
+wget -N https://raw.githubusercontent.com/demianrey/Warp_script/refs/heads/mod/menu.sh && bash menu.sh d
 ```
 Renovar IP de Netflix de Japón
 ```

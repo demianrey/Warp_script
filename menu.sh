@@ -11,9 +11,9 @@ GITHUB_PROXY=('' 'https://v6.gh-proxy.org/' 'https://gh-proxy.com/' 'https://hub
 
 trap cleanup_resources EXIT INT TERM
 
-E[0]="\n Language:\n 1. English (default) \n 2. 简体中文\n 3. Español"
-C[0]="\n 语言:\n 1. English \n 2. 简体中文 (默认)\n 3. Español"
-S[0]="\n Idioma:\n 1. English \n 2. 简体中文\n 3. Español (predeterminado)"
+E[0]="\n Language:\n 1. English\n 2. 简体中文\n 3. Español (default)"
+C[0]="\n 语言:\n 1. English\n 2. 简体中文\n 3. Español (默认)"
+S[0]="\n Idioma:\n 1. English\n 2. 简体中文\n 3. Español (predeterminado)"
 E[1]="1. Account: Remove deprecated WARP+ and Teams account types from installation and upgrade processes (warp a) following Cloudflare's adjustments; 2. Bug Fix: Resolve networking breakdown by correcting routing rule handling during Linux Client removal in proxy mode; 3. Performance: Implement self-hosted IP API to significantly improve IP information retrieval speed; 4. Cleanup: Remove obsolete script prompts and redundant UI messages."
 C[1]="1. 账户管理优化： 顺应 Cloudflare 对 WARP 账户政策的调整，移除了已过时的 WARP+ 和 Teams 账户类型，精简了安装流程及账户升级功能（受影响命令：warp a）; 2. 修复卸载 Bug： 修正了 Linux Client 在 Proxy 模式下，卸载程序后误操作路由规则而导致的网络故障问题; 3. 性能提升： 引入自建 IP API 替代第三方接口，显著提升了 IP 信息获取和脚本初始化的速度; 4. 脚本清理： 移除了部分不再使用的冗余脚本提示语及过时代码块，使输出界面更加简洁"
 E[2]="The script must be run as root, you can enter sudo -i and then download and run again. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
@@ -477,9 +477,9 @@ select_language() {
   if [ -s /etc/wireguard/language ]; then
     L=$(cat /etc/wireguard/language)
   else
-    L=E && [[ -z "$OPTION" || "$OPTION" = [aclehdpbviw46sg] ]] && hint " $(text 0) \n" && reading " $(text 50) " LANGUAGE
+    L=S && [[ -z "$OPTION" || "$OPTION" = [aclehdpbviw46sg] ]] && hint " $(text 0) \n" && reading " $(text 50) " LANGUAGE
+    [ "$LANGUAGE" = 1 ] && L=E
     [ "$LANGUAGE" = 2 ] && L=C
-    [ "$LANGUAGE" = 3 ] && L=S
   fi
 }
 

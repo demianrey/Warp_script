@@ -469,18 +469,14 @@ statistics_of_run-times() {
   fi
 }
 
-# 选择语言，先判断 /etc/wireguard/language 里的语言选择，没有的话再让用户选择，默认英语。处理中文显示的问题
+# 选择语言，默认西班牙语
 select_language() {
   UTF8_LOCALE=$(locale -a 2>/dev/null | grep -iEm1 "UTF-8|utf8")
   [ -n "$UTF8_LOCALE" ] && export LC_ALL="$UTF8_LOCALE" LANG="$UTF8_LOCALE" LANGUAGE="$UTF8_LOCALE"
 
-  if [ -s /etc/wireguard/language ]; then
-    L=$(cat /etc/wireguard/language)
-  else
-    L=S && [[ -z "$OPTION" || "$OPTION" = [aclehdpbviw46sg] ]] && hint " $(text 0) \n" && reading " $(text 50) " LANGUAGE
-    [ "$LANGUAGE" = 1 ] && L=E
-    [ "$LANGUAGE" = 2 ] && L=C
-  fi
+  L=S && [[ -z "$OPTION" || "$OPTION" = [aclehdpbviw46sg] ]] && hint " $(text 0) \n" && reading " $(text 50) " LANGUAGE
+  [ "$LANGUAGE" = 1 ] && L=E
+  [ "$LANGUAGE" = 2 ] && L=C
 }
 
 # 必须以root运行脚本

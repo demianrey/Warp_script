@@ -314,6 +314,32 @@ E[150]="Failed to install proxychains. Please install it manually."
 C[150]="安装 proxychains 失败。请手动安装。"
 E[151]="Registering WARP via proxychains..."
 C[151]="正在通过 proxychains 注册 WARP..."
+E[160]="Report WARP status to dr-guardian (active IP and country)"
+C[160]="向 dr-guardian 报告 WARP 状态（活动 IP 和国家）"
+E[161]="\n WARP status reporting to dr-guardian \n"
+C[161]="\n 向 dr-guardian 报告 WARP 状态 \n"
+E[162]="Status: CONFIGURED -\> \${DRG_HOST}:\${DRG_PORT} \(every \${DRG_INTERVAL} min\)"
+C[162]="状态: 已配置 -\> \${DRG_HOST}:\${DRG_PORT} \(每 \${DRG_INTERVAL} 分钟\)"
+E[163]="Status: NOT CONFIGURED"
+C[163]="状态: 未配置"
+E[164]="\n 1. Configure / reconfigure\n 2. Disable (remove cron)\n 3. Show SSH public key\n 0. Back\n"
+C[164]="\n 1. 配置/重新配置\n 2. 停用（移除定时任务）\n 3. 查看 SSH 公钥\n 0. 返回\n"
+E[165]="Choose an option: "
+C[165]="选择一个选项: "
+E[166]="dr-guardian host (e.g. backup.demianred.com): "
+C[166]="dr-guardian 主机 (例如 backup.demianred.com): "
+E[167]="dr-guardian SSH port [22345]: "
+C[167]="dr-guardian SSH 端口 [22345]: "
+E[168]="Report interval in minutes [5]: "
+C[168]="报告间隔（分钟）[5]: "
+E[169]="Configuration saved. Copy this public key and send it to the dr-guardian admin to authorize it:\n"
+C[169]="配置已保存。请复制此公钥并发送给 dr-guardian 管理员以授权:\n"
+E[170]="\n Press ENTER to continue "
+C[170]="\n 按回车键继续 "
+E[171]="Reporting to dr-guardian disabled."
+C[171]="已停用向 dr-guardian 的报告。"
+E[172]="No key generated yet. Choose option 1 first."
+C[172]="尚未生成密钥。请先选择选项 1。"
 S[1]="1. Cuentas: Se eliminaron los tipos de cuenta WARP+ y Teams obsoletos del proceso de instalación y actualización (warp a) siguiendo los ajustes de Cloudflare; 2. Corrección de Bug: Se resolvió la interrupción de red corrigiendo el manejo de reglas de enrutamiento durante la eliminación del Linux Client en modo proxy; 3. Rendimiento: Se implementó una IP API propia para mejorar significativamente la velocidad de obtención de IP; 4. Limpieza: Se eliminaron mensajes obsoletos y UI redundante."
 S[2]="El script debe ejecutarse como root, puede ingresar sudo -i y luego descargar y ejecutar de nuevo. Comentarios: [https://github.com/fscarmen/warp-sh/issues]"
 S[3]="El módulo TUN no está cargado. Debe activarlo en el panel de control. Solicite más ayuda al proveedor. Comentarios: [https://github.com/fscarmen/warp-sh/issues]"
@@ -464,6 +490,19 @@ S[148]="Región asignada: \$PROXY_REGION. "
 S[149]="Instalando proxychains4..."
 S[150]="Falló la instalación de proxychains. Por favor instálelo manualmente."
 S[151]="Registrando WARP vía proxychains..."
+S[160]="Reportar estado WARP a dr-guardian (IP y país activo)"
+S[161]="\n Reporte de estado WARP hacia dr-guardian \n"
+S[162]="Estado: CONFIGURADO -\> \${DRG_HOST}:\${DRG_PORT} \(cada \${DRG_INTERVAL} min\)"
+S[163]="Estado: NO CONFIGURADO"
+S[164]="\n 1. Configurar / reconfigurar\n 2. Desactivar (quitar cron)\n 3. Ver clave pública SSH\n 0. Volver\n"
+S[165]="Elegí una opción: "
+S[166]="Host de dr-guardian (ej. backup.demianred.com): "
+S[167]="Puerto SSH de dr-guardian [22345]: "
+S[168]="Intervalo de reporte en minutos [5]: "
+S[169]="Configuración guardada. Copiá esta clave pública y enviásela al administrador de dr-guardian para autorizarla:\n"
+S[170]="\n Presioná ENTER para continuar "
+S[171]="Reporte hacia dr-guardian desactivado."
+S[172]="Todavía no generaste una clave. Elegí la opción 1 primero."
 
 # 自定义字体彩色，read 函数
 warning() { echo -e "\033[31m\033[01m$*\033[0m"; }  # 红色
@@ -2624,6 +2663,89 @@ wireproxy_solution() {
 }
 
 # 判断当前 WARP 网络接口及 Client 的运行状态，并对应的给菜单和动作赋值
+# Reporta estado de WARP (activo/inactivo, IP, país) hacia dr-guardian vía rsync/SSH
+dr_guardian_menu() {
+  local CONF_FILE="/etc/dr-guardian-report.conf"
+  local REPORT_SCRIPT="/root/Warp_script/dr_guardian_report.sh"
+  local SSH_KEY="/root/.ssh/dr-guardian_warp_report"
+  local CRON_MARK="dr-guardian_warp_report"
+
+  clear
+  hint "$(text 161)"
+  if [ -f "$CONF_FILE" ]; then
+    . "$CONF_FILE"
+    info " $(text 162) "
+  else
+    info " $(text 163) "
+  fi
+  hint "$(text 164)"
+  reading "$(text 165)" DRG_CHOICE
+
+  case "$DRG_CHOICE" in
+    1 )
+      reading "$(text 166)" DRG_HOST
+      reading "$(text 167)" DRG_PORT
+      DRG_PORT="${DRG_PORT:-22345}"
+      reading "$(text 168)" DRG_INTERVAL
+      DRG_INTERVAL="${DRG_INTERVAL:-5}"
+
+      [ -f "$SSH_KEY" ] || ssh-keygen -t ed25519 -f "$SSH_KEY" -N "" -C "dr-guardian-warp-report@$(hostname)" -q
+
+      cat > "$CONF_FILE" <<EOF
+DRG_HOST="$DRG_HOST"
+DRG_PORT="$DRG_PORT"
+DRG_INTERVAL="$DRG_INTERVAL"
+DRG_SSH_KEY="$SSH_KEY"
+EOF
+
+      cat > "$REPORT_SCRIPT" <<'SCRIPT'
+#!/bin/bash
+set -euo pipefail
+CONF_FILE="/etc/dr-guardian-report.conf"
+[ -f "$CONF_FILE" ] || exit 0
+. "$CONF_FILE"
+
+HOSTNAME_LABEL=$(hostname)
+TRACE=$(curl -s --max-time 5 https://www.cloudflare.com/cdn-cgi/trace || echo "")
+WARP_STATUS=$(echo "$TRACE" | sed -n 's/^warp=//p')
+IP=$(echo "$TRACE" | sed -n 's/^ip=//p')
+COUNTRY=$(echo "$TRACE" | sed -n 's/^loc=//p')
+UPDATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+TMP=$(mktemp)
+cat > "$TMP" <<JSON
+{"hostname":"${HOSTNAME_LABEL}","warp":"${WARP_STATUS:-unknown}","ip":"${IP:-unknown}","country":"${COUNTRY:-unknown}","updated":"${UPDATED}"}
+JSON
+
+rsync -az -e "ssh -p ${DRG_PORT} -i ${DRG_SSH_KEY} -o StrictHostKeyChecking=accept-new" \
+  "$TMP" "root@${DRG_HOST}:/root/warp-status/incoming/${HOSTNAME_LABEL}.json"
+rm -f "$TMP"
+SCRIPT
+      chmod 700 "$REPORT_SCRIPT"
+
+      ( crontab -l 2>/dev/null | grep -v "$CRON_MARK" ; echo "*/${DRG_INTERVAL} * * * * ${REPORT_SCRIPT} >> /var/log/dr-guardian-report.log 2>&1 # ${CRON_MARK}" ) | crontab -
+
+      info "$(text 169)"
+      cat "${SSH_KEY}.pub"
+      reading "$(text 170)" _
+      ;;
+    2 )
+      ( crontab -l 2>/dev/null | grep -v "$CRON_MARK" ) | crontab - 2>/dev/null || true
+      rm -f "$CONF_FILE"
+      info "$(text 171)"
+      reading "$(text 170)" _
+      ;;
+    3 )
+      if [ -f "${SSH_KEY}.pub" ]; then
+        cat "${SSH_KEY}.pub"
+      else
+        warning "$(text 172)"
+      fi
+      reading "$(text 170)" _
+      ;;
+  esac
+}
+
 menu_setting() {
   if [[ "$CLIENT" -gt 1 || "$WIREPROXY" -gt 0 ]]; then
     [ "$CLIENT" -lt 3 ] && MENU_OPTION[1]="1.  $(text 88)" || MENU_OPTION[1]="1.  $(text 89)"
@@ -2674,6 +2796,7 @@ menu_setting() {
   MENU_OPTION[13]="13. ${WIREPROXY_INSTALLED}$(text 113)"
   MENU_OPTION[14]="14. ${CLIENT_INSTALLED}${CLIENT_NOT_ALLOWED_ARCHITECTURE}$(text 132)"
   MENU_OPTION[15]="15. ${CLIENT_INSTALLED}$(text 141)"
+  MENU_OPTION[16]="16. $(text 160)"
   MENU_OPTION[0]="0.  $(text 76)"
 
   ACTION[4]() { OPTION=o; onoff; }
@@ -2683,6 +2806,7 @@ menu_setting() {
   ACTION[13]() { IS_PUFFERFFISH=is_pufferffish; install; };
   ACTION[14]() { IS_LUBAN=is_luban; client_install; };
   ACTION[15]() { register_via_proxy; };
+  ACTION[16]() { dr_guardian_menu; };
   ACTION[0]() { exit; }
   }
 

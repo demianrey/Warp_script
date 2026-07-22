@@ -346,6 +346,8 @@ E[174]="✅ Test successful: the report reached dr-guardian correctly."
 C[174]="✅ 测试成功：报告已成功送达 dr-guardian。"
 E[175]="❌ Test failed. Check the SSH port, that the key was authorized on dr-guardian, and connectivity. Detail:"
 C[175]="❌ 测试失败。请检查 SSH 端口、密钥是否已在 dr-guardian 上被授权，以及网络连通性。详情:"
+E[176]="Display name in dr-guardian (Enter = use hostname): "
+C[176]="在 dr-guardian 中显示的名称（回车 = 使用主机名）: "
 S[1]="1. Cuentas: Se eliminaron los tipos de cuenta WARP+ y Teams obsoletos del proceso de instalación y actualización (warp a) siguiendo los ajustes de Cloudflare; 2. Corrección de Bug: Se resolvió la interrupción de red corrigiendo el manejo de reglas de enrutamiento durante la eliminación del Linux Client en modo proxy; 3. Rendimiento: Se implementó una IP API propia para mejorar significativamente la velocidad de obtención de IP; 4. Limpieza: Se eliminaron mensajes obsoletos y UI redundante."
 S[2]="El script debe ejecutarse como root, puede ingresar sudo -i y luego descargar y ejecutar de nuevo. Comentarios: [https://github.com/fscarmen/warp-sh/issues]"
 S[3]="El módulo TUN no está cargado. Debe activarlo en el panel de control. Solicite más ayuda al proveedor. Comentarios: [https://github.com/fscarmen/warp-sh/issues]"
@@ -512,6 +514,7 @@ S[172]="Todavía no generaste una clave. Elegí la opción 1 primero."
 S[173]="\n Probando conexión con dr-guardian... "
 S[174]="✅ Prueba exitosa: el reporte llegó correctamente a dr-guardian."
 S[175]="❌ Prueba fallida. Revisá el puerto SSH, que la clave esté autorizada en dr-guardian, y la conectividad. Detalle:"
+S[176]="Nombre a mostrar en dr-guardian (Enter = usar el hostname): "
 
 # 自定义字体彩色，read 函数
 warning() { echo -e "\033[31m\033[01m$*\033[0m"; }  # 红色
@@ -2700,6 +2703,7 @@ dr_guardian_menu() {
       DRG_PORT="${DRG_PORT:-22345}"
       reading "$(text 168)" DRG_INTERVAL
       DRG_INTERVAL="${DRG_INTERVAL:-5}"
+      reading "$(text 176)" DRG_LABEL
 
       mkdir -p -m 700 /root/.ssh
       [ -f "$SSH_KEY" ] || ssh-keygen -t ed25519 -f "$SSH_KEY" -N "" -C "dr-guardian-warp-report@$(hostname)" -q
@@ -2709,6 +2713,7 @@ DRG_HOST="$DRG_HOST"
 DRG_PORT="$DRG_PORT"
 DRG_INTERVAL="$DRG_INTERVAL"
 DRG_SSH_KEY="$SSH_KEY"
+DRG_LABEL="$DRG_LABEL"
 EOF
 
       cat > "$REPORT_SCRIPT" <<'SCRIPT'
@@ -2719,6 +2724,7 @@ CONF_FILE="/etc/dr-guardian-report.conf"
 . "$CONF_FILE"
 
 HOSTNAME_LABEL=$(hostname)
+DISPLAY_LABEL="${DRG_LABEL:-$HOSTNAME_LABEL}"
 
 # Detecta el modo activo: túnel nativo (wg), Linux Client socks5 (warp-svc) o WireProxy
 MODE="native"
@@ -2750,7 +2756,7 @@ UPDATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 TMP=$(mktemp)
 cat > "$TMP" <<JSON
-{"hostname":"${HOSTNAME_LABEL}","warp":"${WARP_STATUS:-unknown}","mode":"${MODE}","ip4":"${IP4:-unknown}","ip6":"${IP6:-unknown}","country":"${COUNTRY:-unknown}","updated":"${UPDATED}"}
+{"hostname":"${HOSTNAME_LABEL}","label":"${DISPLAY_LABEL}","warp":"${WARP_STATUS:-unknown}","mode":"${MODE}","ip4":"${IP4:-unknown}","ip6":"${IP6:-unknown}","country":"${COUNTRY:-unknown}","updated":"${UPDATED}"}
 JSON
 
 rsync -az -e "ssh -p ${DRG_PORT} -i ${DRG_SSH_KEY} -o StrictHostKeyChecking=accept-new" \

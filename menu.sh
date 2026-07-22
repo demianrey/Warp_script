@@ -2725,6 +2725,7 @@ CONF_FILE="/etc/dr-guardian-report.conf"
 
 HOSTNAME_LABEL=$(hostname)
 DISPLAY_LABEL="${DRG_LABEL:-$HOSTNAME_LABEL}"
+FILE_KEY=$(printf '%s' "$DISPLAY_LABEL" | tr -c 'A-Za-z0-9_-' '_')
 
 # Detecta el modo activo: túnel nativo (wg), Linux Client socks5 (warp-svc) o WireProxy
 MODE="native"
@@ -2760,7 +2761,7 @@ cat > "$TMP" <<JSON
 JSON
 
 rsync -az -e "ssh -p ${DRG_PORT} -i ${DRG_SSH_KEY} -o StrictHostKeyChecking=accept-new" \
-  "$TMP" "root@${DRG_HOST}:${HOSTNAME_LABEL}.json"
+  "$TMP" "root@${DRG_HOST}:${FILE_KEY}.json"
 rm -f "$TMP"
 SCRIPT
       chmod 700 "$REPORT_SCRIPT"

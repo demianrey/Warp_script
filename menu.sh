@@ -2732,19 +2732,25 @@ elif ss -nltp 2>/dev/null | grep -q '"warp-svc"'; then
 fi
 
 if [ -n "$SOCKS5_PORT" ]; then
-  TRACE=$(curl -s --max-time 5 -x "socks5h://127.0.0.1:${SOCKS5_PORT}" https://www.cloudflare.com/cdn-cgi/trace || echo "")
+  PROXY_ARG="--proxy socks5h://127.0.0.1:${SOCKS5_PORT}"
 else
-  TRACE=$(curl -s --max-time 5 https://www.cloudflare.com/cdn-cgi/trace || echo "")
+  PROXY_ARG=""
 fi
 
+# api-ipv4.ip.sb / api-ipv6.ip.sb solo responden por esa familia, a diferencia
+# del trace de Cloudflare que resuelve a la que prefiera el sistema (por eso
+# se veía solo la IPv6). Mismo método que usa el propio script warp (ip_info).
+IP4=$(curl -s --max-time 5 $PROXY_ARG https://api-ipv4.ip.sb/ip 2>/dev/null || echo "")
+IP6=$(curl -s --max-time 5 $PROXY_ARG https://api-ipv6.ip.sb/ip 2>/dev/null || echo "")
+TRACE=$(curl -s --max-time 5 $PROXY_ARG https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null || echo "")
+
 WARP_STATUS=$(echo "$TRACE" | sed -n 's/^warp=//p')
-IP=$(echo "$TRACE" | sed -n 's/^ip=//p')
 COUNTRY=$(echo "$TRACE" | sed -n 's/^loc=//p')
 UPDATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 TMP=$(mktemp)
 cat > "$TMP" <<JSON
-{"hostname":"${HOSTNAME_LABEL}","warp":"${WARP_STATUS:-unknown}","mode":"${MODE}","ip":"${IP:-unknown}","country":"${COUNTRY:-unknown}","updated":"${UPDATED}"}
+{"hostname":"${HOSTNAME_LABEL}","warp":"${WARP_STATUS:-unknown}","mode":"${MODE}","ip4":"${IP4:-unknown}","ip6":"${IP6:-unknown}","country":"${COUNTRY:-unknown}","updated":"${UPDATED}"}
 JSON
 
 rsync -az -e "ssh -p ${DRG_PORT} -i ${DRG_SSH_KEY} -o StrictHostKeyChecking=accept-new" \

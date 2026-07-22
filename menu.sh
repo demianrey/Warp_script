@@ -2719,7 +2719,24 @@ CONF_FILE="/etc/dr-guardian-report.conf"
 . "$CONF_FILE"
 
 HOSTNAME_LABEL=$(hostname)
-TRACE=$(curl -s --max-time 5 https://www.cloudflare.com/cdn-cgi/trace || echo "")
+
+# Detecta el modo activo: túnel nativo (wg), Linux Client socks5 (warp-svc) o WireProxy
+MODE="native"
+SOCKS5_PORT=""
+if ss -nltp 2>/dev/null | grep -q '"wireproxy"'; then
+  MODE="wireproxy"
+  SOCKS5_PORT=$(ss -nltp 2>/dev/null | awk '/"wireproxy"/{print $4; exit}' | rev | cut -d: -f1 | rev)
+elif ss -nltp 2>/dev/null | grep -q '"warp-svc"'; then
+  MODE="client"
+  SOCKS5_PORT=$(ss -nltp 2>/dev/null | awk '/"warp-svc"/{print $4; exit}' | rev | cut -d: -f1 | rev)
+fi
+
+if [ -n "$SOCKS5_PORT" ]; then
+  TRACE=$(curl -s --max-time 5 -x "socks5h://127.0.0.1:${SOCKS5_PORT}" https://www.cloudflare.com/cdn-cgi/trace || echo "")
+else
+  TRACE=$(curl -s --max-time 5 https://www.cloudflare.com/cdn-cgi/trace || echo "")
+fi
+
 WARP_STATUS=$(echo "$TRACE" | sed -n 's/^warp=//p')
 IP=$(echo "$TRACE" | sed -n 's/^ip=//p')
 COUNTRY=$(echo "$TRACE" | sed -n 's/^loc=//p')
@@ -2727,7 +2744,7 @@ UPDATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 TMP=$(mktemp)
 cat > "$TMP" <<JSON
-{"hostname":"${HOSTNAME_LABEL}","warp":"${WARP_STATUS:-unknown}","ip":"${IP:-unknown}","country":"${COUNTRY:-unknown}","updated":"${UPDATED}"}
+{"hostname":"${HOSTNAME_LABEL}","warp":"${WARP_STATUS:-unknown}","mode":"${MODE}","ip":"${IP:-unknown}","country":"${COUNTRY:-unknown}","updated":"${UPDATED}"}
 JSON
 
 rsync -az -e "ssh -p ${DRG_PORT} -i ${DRG_SSH_KEY} -o StrictHostKeyChecking=accept-new" \

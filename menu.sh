@@ -2722,7 +2722,7 @@ cat > "$TMP" <<JSON
 JSON
 
 rsync -az -e "ssh -p ${DRG_PORT} -i ${DRG_SSH_KEY} -o StrictHostKeyChecking=accept-new" \
-  "$TMP" "root@${DRG_HOST}:/root/warp-status/incoming/${HOSTNAME_LABEL}.json"
+  "$TMP" "root@${DRG_HOST}:${HOSTNAME_LABEL}.json"
 rm -f "$TMP"
 SCRIPT
       chmod 700 "$REPORT_SCRIPT"

@@ -2666,9 +2666,12 @@ wireproxy_solution() {
 # Reporta estado de WARP (activo/inactivo, IP, país) hacia dr-guardian vía rsync/SSH
 dr_guardian_menu() {
   local CONF_FILE="/etc/dr-guardian-report.conf"
-  local REPORT_SCRIPT="/root/Warp_script/dr_guardian_report.sh"
+  local REPORT_DIR="/root/.dr-guardian"
+  local REPORT_SCRIPT="$REPORT_DIR/dr_guardian_report.sh"
   local SSH_KEY="/root/.ssh/dr-guardian_warp_report"
   local CRON_MARK="dr-guardian_warp_report"
+
+  mkdir -p "$REPORT_DIR"
 
   clear
   hint "$(text 161)"
@@ -2689,6 +2692,7 @@ dr_guardian_menu() {
       reading "$(text 168)" DRG_INTERVAL
       DRG_INTERVAL="${DRG_INTERVAL:-5}"
 
+      mkdir -p -m 700 /root/.ssh
       [ -f "$SSH_KEY" ] || ssh-keygen -t ed25519 -f "$SSH_KEY" -N "" -C "dr-guardian-warp-report@$(hostname)" -q
 
       cat > "$CONF_FILE" <<EOF

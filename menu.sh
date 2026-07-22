@@ -340,6 +340,12 @@ E[171]="Reporting to dr-guardian disabled."
 C[171]="已停用向 dr-guardian 的报告。"
 E[172]="No key generated yet. Choose option 1 first."
 C[172]="尚未生成密钥。请先选择选项 1。"
+E[173]="\n Testing connection to dr-guardian... "
+C[173]="\n 正在测试与 dr-guardian 的连接... "
+E[174]="✅ Test successful: the report reached dr-guardian correctly."
+C[174]="✅ 测试成功：报告已成功送达 dr-guardian。"
+E[175]="❌ Test failed. Check the SSH port, that the key was authorized on dr-guardian, and connectivity. Detail:"
+C[175]="❌ 测试失败。请检查 SSH 端口、密钥是否已在 dr-guardian 上被授权，以及网络连通性。详情:"
 S[1]="1. Cuentas: Se eliminaron los tipos de cuenta WARP+ y Teams obsoletos del proceso de instalación y actualización (warp a) siguiendo los ajustes de Cloudflare; 2. Corrección de Bug: Se resolvió la interrupción de red corrigiendo el manejo de reglas de enrutamiento durante la eliminación del Linux Client en modo proxy; 3. Rendimiento: Se implementó una IP API propia para mejorar significativamente la velocidad de obtención de IP; 4. Limpieza: Se eliminaron mensajes obsoletos y UI redundante."
 S[2]="El script debe ejecutarse como root, puede ingresar sudo -i y luego descargar y ejecutar de nuevo. Comentarios: [https://github.com/fscarmen/warp-sh/issues]"
 S[3]="El módulo TUN no está cargado. Debe activarlo en el panel de control. Solicite más ayuda al proveedor. Comentarios: [https://github.com/fscarmen/warp-sh/issues]"
@@ -503,6 +509,9 @@ S[169]="Configuración guardada. Copiá esta clave pública y enviásela al admi
 S[170]="\n Presioná ENTER para continuar "
 S[171]="Reporte hacia dr-guardian desactivado."
 S[172]="Todavía no generaste una clave. Elegí la opción 1 primero."
+S[173]="\n Probando conexión con dr-guardian... "
+S[174]="✅ Prueba exitosa: el reporte llegó correctamente a dr-guardian."
+S[175]="❌ Prueba fallida. Revisá el puerto SSH, que la clave esté autorizada en dr-guardian, y la conectividad. Detalle:"
 
 # 自定义字体彩色，read 函数
 warning() { echo -e "\033[31m\033[01m$*\033[0m"; }  # 红色
@@ -2731,6 +2740,14 @@ SCRIPT
 
       info "$(text 169)"
       cat "${SSH_KEY}.pub"
+
+      hint "$(text 173)"
+      if TEST_OUTPUT=$("$REPORT_SCRIPT" 2>&1); then
+        info "$(text 174)"
+      else
+        warning "$(text 175)"
+        echo "$TEST_OUTPUT"
+      fi
       reading "$(text 170)" _
       ;;
     2 )

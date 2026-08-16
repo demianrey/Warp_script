@@ -2748,7 +2748,16 @@ detect_mode() {
 }
 detect_mode
 
-if [ -n "$SOCKS5_PORT" ]; then
+SOCKS5_USER=""
+SOCKS5_PASS=""
+if [ "$MODE" = "wireproxy" ] && [ -f /etc/wireguard/proxy.conf ]; then
+  SOCKS5_USER=$(awk -F= '/^[[:space:]]*Username[[:space:]]*=/{gsub(/^[ \t]+|[ \t]+$/,"",$2); print $2; exit}' /etc/wireguard/proxy.conf)
+  SOCKS5_PASS=$(awk -F= '/^[[:space:]]*Password[[:space:]]*=/{gsub(/^[ \t]+|[ \t]+$/,"",$2); print $2; exit}' /etc/wireguard/proxy.conf)
+fi
+
+if [ -n "$SOCKS5_PORT" ] && [ -n "$SOCKS5_USER" ] && [ -n "$SOCKS5_PASS" ]; then
+  PROXY_ARG="--proxy socks5h://${SOCKS5_USER}:${SOCKS5_PASS}@127.0.0.1:${SOCKS5_PORT}"
+elif [ -n "$SOCKS5_PORT" ]; then
   PROXY_ARG="--proxy socks5h://127.0.0.1:${SOCKS5_PORT}"
 else
   PROXY_ARG=""

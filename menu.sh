@@ -2727,16 +2727,26 @@ HOSTNAME_LABEL=$(hostname)
 DISPLAY_LABEL="${DRG_LABEL:-$HOSTNAME_LABEL}"
 FILE_KEY=$(printf '%s' "$DISPLAY_LABEL" | tr -c 'A-Za-z0-9_-' '_')
 
-# Detecta el modo activo: túnel nativo (wg), Linux Client socks5 (warp-svc) o WireProxy
-MODE="native"
-SOCKS5_PORT=""
-if ss -nltp 2>/dev/null | grep -q '"wireproxy"'; then
-  MODE="wireproxy"
-  SOCKS5_PORT=$(ss -nltp 2>/dev/null | awk '/"wireproxy"/{print $4; exit}' | rev | cut -d: -f1 | rev)
-elif ss -nltp 2>/dev/null | grep -q '"warp-svc"'; then
-  MODE="client"
-  SOCKS5_PORT=$(ss -nltp 2>/dev/null | awk '/"warp-svc"/{print $4; exit}' | rev | cut -d: -f1 | rev)
-fi
+# Detecta el modo activo: túnel nativo (wg), Linux Client socks5 (warp-svc) o WireProxy.
+# Se reintenta un par de veces porque en el momento justo del cron el proceso
+# puede estar reiniciando (keepalive, etc.) y ss todavía no lo ve escuchando.
+detect_mode() {
+  MODE="native"
+  SOCKS5_PORT=""
+  local try
+  for try in 1 2 3; do
+    if ss -nltp 2>/dev/null | grep -q '"wireproxy"'; then
+      MODE="wireproxy"
+      SOCKS5_PORT=$(ss -nltp 2>/dev/null | awk '/"wireproxy"/{print $4; exit}' | rev | cut -d: -f1 | rev)
+    elif ss -nltp 2>/dev/null | grep -q '"warp-svc"'; then
+      MODE="client"
+      SOCKS5_PORT=$(ss -nltp 2>/dev/null | awk '/"warp-svc"/{print $4; exit}' | rev | cut -d: -f1 | rev)
+    fi
+    [ "$MODE" != "native" ] && [ -n "$SOCKS5_PORT" ] && break
+    sleep 2
+  done
+}
+detect_mode
 
 if [ -n "$SOCKS5_PORT" ]; then
   PROXY_ARG="--proxy socks5h://127.0.0.1:${SOCKS5_PORT}"
@@ -2744,12 +2754,24 @@ else
   PROXY_ARG=""
 fi
 
+# Reintenta una vez si la respuesta viene vacía (timeout, proxy reconectando, etc.)
+# antes de resignarse a reportar "unknown".
+curl_retry() {
+  local url="$1" out
+  out=$(curl -s --max-time 8 $PROXY_ARG "$url" 2>/dev/null || echo "")
+  if [ -z "$out" ]; then
+    sleep 2
+    out=$(curl -s --max-time 8 $PROXY_ARG "$url" 2>/dev/null || echo "")
+  fi
+  printf '%s' "$out"
+}
+
 # api-ipv4.ip.sb / api-ipv6.ip.sb solo responden por esa familia, a diferencia
 # del trace de Cloudflare que resuelve a la que prefiera el sistema (por eso
 # se veía solo la IPv6). Mismo método que usa el propio script warp (ip_info).
-IP4=$(curl -s --max-time 5 $PROXY_ARG https://api-ipv4.ip.sb/ip 2>/dev/null || echo "")
-IP6=$(curl -s --max-time 5 $PROXY_ARG https://api-ipv6.ip.sb/ip 2>/dev/null || echo "")
-TRACE=$(curl -s --max-time 5 $PROXY_ARG https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null || echo "")
+IP4=$(curl_retry https://api-ipv4.ip.sb/ip)
+IP6=$(curl_retry https://api-ipv6.ip.sb/ip)
+TRACE=$(curl_retry https://www.cloudflare.com/cdn-cgi/trace)
 
 WARP_STATUS=$(echo "$TRACE" | sed -n 's/^warp=//p')
 COUNTRY=$(echo "$TRACE" | sed -n 's/^loc=//p')

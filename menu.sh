@@ -2786,6 +2786,30 @@ WARP_STATUS=$(echo "$TRACE" | sed -n 's/^warp=//p')
 COUNTRY=$(echo "$TRACE" | sed -n 's/^loc=//p')
 UPDATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
+# Auto-recuperación: a veces WireProxy se cuelga (el proceso sigue vivo pero el túnel
+# deja de pasar tráfico) y la IPv4 queda sin resolver de forma sostenida. En vez de
+# esperar a que alguien entre a mano a reiniciar el servicio, lo reinicia solo tras
+# un par de corridas seguidas en ese estado.
+if [ "$MODE" = "wireproxy" ]; then
+  HEAL_BADCOUNT_FILE="/root/.dr-guardian/wireproxy_ip_badcount"
+  HEAL_THRESHOLD=2
+  if [ -z "$IP4" ]; then
+    HEAL_BADCOUNT=$(cat "$HEAL_BADCOUNT_FILE" 2>/dev/null || echo 0)
+    HEAL_BADCOUNT=$((HEAL_BADCOUNT + 1))
+    echo "$HEAL_BADCOUNT" > "$HEAL_BADCOUNT_FILE"
+    if [ "$HEAL_BADCOUNT" -ge "$HEAL_THRESHOLD" ]; then
+      if [ -f /etc/alpine-release ]; then
+        rc-service wireproxy restart >/dev/null 2>&1 || true
+      else
+        systemctl restart wireproxy >/dev/null 2>&1 || true
+      fi
+      echo 0 > "$HEAL_BADCOUNT_FILE"
+    fi
+  else
+    echo 0 > "$HEAL_BADCOUNT_FILE"
+  fi
+fi
+
 TMP=$(mktemp)
 cat > "$TMP" <<JSON
 {"hostname":"${HOSTNAME_LABEL}","label":"${DISPLAY_LABEL}","warp":"${WARP_STATUS:-unknown}","mode":"${MODE}","ip4":"${IP4:-unknown}","ip6":"${IP6:-unknown}","country":"${COUNTRY:-unknown}","updated":"${UPDATED}"}

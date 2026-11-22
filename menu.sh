@@ -2336,6 +2336,22 @@ EOF
     local FREE_PRIVATEKEY=$(awk '/PrivateKey/{print $NF}' /etc/wireguard/warp.conf)
     [ "$m" = 0 ] && local DNS='2606:4700:4700::1111,2001:4860:4860::8888,2001:4860:4860::8844,1.1.1.1,8.8.8.8,8.8.4.4' || local DNS='1.1.1.1,8.8.8.8,8.8.4.4,2606:4700:4700::1111,2001:4860:4860::8888,2001:4860:4860::8844'
 
+    # Fijar el Endpoint al literal que la registración asigna a este dispositivo, en vez
+    # del hostname. En un VPS de una sola familia el hostname es una mina: en los 4 nodos
+    # IPv4-only de producción, engage.cloudflareclient.com resolvía solo a su AAAA
+    # (2606:4700:d0::a29f:c001), así que wireproxy mandaba los handshakes a una dirección
+    # inalcanzable y el túnel no levantaba nunca. No se notaba hasta el primer reinicio,
+    # porque la sesión ya establecida seguía viva. La registración trae el endpoint en
+    # ambas familias, así que se usa el de la familia que el host sí tiene; si no se
+    # puede extraer, se deja el hostname (comportamiento anterior).
+    local REG_EP4=$(grep -oE '"v4"[[:space:]]*:[[:space:]]*"[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+"' /etc/wireguard/warp-account.conf 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
+    local REG_EP6=$(grep -oE '"v6"[[:space:]]*:[[:space:]]*"\[[0-9a-f:]+\]:[0-9]+"' /etc/wireguard/warp-account.conf 2>/dev/null | head -1 | grep -oE '\[[0-9a-f:]+\]')
+    if [ "$m" = 0 ]; then
+      [ -n "$REG_EP6" ] && ENDPOINT="${REG_EP6}:2408"
+    else
+      [ -n "$REG_EP4" ] && ENDPOINT="${REG_EP4}:2408"
+    fi
+
     # 创建 Wireproxy 配置文件
     cat > /etc/wireguard/proxy.conf << EOF
 # The [Interface] and [Peer] configurations follow the same semantics and meaning
@@ -2343,8 +2359,11 @@ EOF
 # https://wiki.archlinux.org/title/WireGuard#Persistent_configuration
 # https://www.wireguard.com/#simple-network-interface
 [Interface]
-Address = 172.16.0.2/32 # The subnet should be /32 and /128 for IPv4 and v6 respectively
-Address = $FREE_ADDRESS6
+# Ambas direcciones van en UNA linea separadas por coma: wireproxy parsea el config como
+# INI y conserva un solo valor por clave, asi que con dos lineas "Address" se queda con
+# la primera y descarta la IPv6, dejando el tunel sin IPv6 de origen. Las subredes son
+# /32 y /128 para IPv4 y v6 respectivamente.
+Address = 172.16.0.2/32, $FREE_ADDRESS6
 MTU = $MTU
 PrivateKey = $FREE_PRIVATEKEY
 DNS = $DNS

@@ -2815,9 +2815,33 @@ cat > "$TMP" <<JSON
 {"hostname":"${HOSTNAME_LABEL}","label":"${DISPLAY_LABEL}","warp":"${WARP_STATUS:-unknown}","mode":"${MODE}","ip4":"${IP4:-unknown}","ip6":"${IP6:-unknown}","country":"${COUNTRY:-unknown}","updated":"${UPDATED}"}
 JSON
 
-rsync -az -e "ssh -p ${DRG_PORT} -i ${DRG_SSH_KEY} -o StrictHostKeyChecking=accept-new" \
-  "$TMP" "root@${DRG_HOST}:${FILE_KEY}.json"
-rm -f "$TMP"
+# El cron de todos los nodos es */N sobre la misma hora, así que todos empujan su JSON
+# en el mismo segundo. La clave del lado de dr-guardian está restringida vía rrsync, y
+# rrsync toma un lock por directorio: el nodo que llega segundo muere con "Another
+# instance of rrsync is already accessing this directory" (rsync código 12) y pierde el
+# tick entero. Se reintenta con backoff aleatorio, que además desfasa los nodos entre sí
+# en vez de dejarlos competir por el lock en cada corrida.
+RSYNC_TRIES=5
+RSYNC_OK=0
+TRY=1
+while [ "$TRY" -le "$RSYNC_TRIES" ]; do
+  if rsync -az -e "ssh -p ${DRG_PORT} -i ${DRG_SSH_KEY} -o StrictHostKeyChecking=accept-new" \
+      "$TMP" "root@${DRG_HOST}:${FILE_KEY}.json" 2>"${TMP}.err"; then
+    RSYNC_OK=1
+    break
+  fi
+  TRY=$((TRY + 1))
+  if [ "$TRY" -le "$RSYNC_TRIES" ]; then
+    sleep $(( (RANDOM % 15) + TRY * 5 ))
+  fi
+done
+
+# Solo queda constancia en el log si se agotaron los reintentos: un choque de lock
+# aislado es ruido (se resolvió solo), un fallo sostenido sí hay que poder verlo.
+# El código de salida se preserva para que la prueba de la opción 16 siga marcando ❌.
+[ "$RSYNC_OK" -eq 1 ] || cat "${TMP}.err" >&2
+rm -f "$TMP" "${TMP}.err"
+[ "$RSYNC_OK" -eq 1 ]
 SCRIPT
       chmod 700 "$REPORT_SCRIPT"
 
